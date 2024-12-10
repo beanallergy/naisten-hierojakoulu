@@ -1,6 +1,6 @@
-import { test, expect, Response } from '@playwright/test';
+import { test, expect, Response, Locator } from '@playwright/test';
 import { readEtunimetCSV } from './helpers/csv';
-import { displaySlotsMsg, Slot, slotRequestListener } from './helpers/slots';
+import { displaySlotsMsg, UISlot } from './helpers/slots';
 
 const WEB_URL = 'https://avoinna24.fi/lahdenhierojakoulu/reservation';
 const API_BASE_URL = `https://avoinna24.fi/api`;
@@ -27,6 +27,8 @@ function isWomanName(name: string, womenNames: string[]): boolean {
     const etunimi = name.trimStart().split(' ')[0];
     return womenNames.includes(etunimi);
 }
+
+const NO_SLOT_TEXT = "Yhtään vapaita aikoja ei löytynyt valitulla ajanvarausvälillä."
 
 test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
     const X_SYMBOL = `×`;
@@ -61,7 +63,7 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
         for (let i = 0; i < hierojienNimet.length; i++) {
             const hierojanNimi = hierojienNimet[i];
             const isWoman = isWomanName(hierojanNimi, naistenNimet);
-            console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`, isWoman);
+            //console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`, isWoman);
             if (!isWoman) {
                 continue;
             }
@@ -76,23 +78,31 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
 
             await page.getByRole('menuitem', { name: hierojanNimi }).click();
             await page.getByRole('heading', { name: hierojanNimi }).isVisible();
-            console.log(`Valittu palveluntarjoaja: ${hierojanNimi}`);
+            //console.log(`Valittu palveluntarjoaja: ${hierojanNimi}`);
 
-            // TODO rework all this to check DOM elements instead of API
-            let slotsForHieroja: Slot[] | undefined = undefined;
-            page.on('requestfinished', async (req) => {
-                const res = await req.response();
-                const url = req.url();
-                if (
-                    url.startsWith(`${API_BASE_URL}/slot`)
-                    && url.includes('user_id')
-                    && res && res.status() === 200
-                    && res.headers()['content-type']?.includes('json')
-                ) {
-                    slotsForHieroja = await slotRequestListener(res, hierojanNimi)
+            const spinners = await page.locator('.progress-loader-spinner').all();
+            for (const spinner of spinners) {
+                await expect(spinner).toBeHidden();
+            }
+
+            const zeroSlotTextVisible = await page.getByText(NO_SLOT_TEXT).isVisible();
+            
+            let slotsForHieroja: UISlot[] | undefined = [];
+            if (!zeroSlotTextVisible) {
+                const slotColumns = await page.locator('div.slot-column').all();
+                for (const slotColumn of slotColumns) {
+                    const buttons = await slotColumn.locator('button').all();
+                    if (buttons.length > 0) {
+                        const dateStrong = slotColumn.locator('strong').first();
+                        const dateSpans = await dateStrong.locator('span').allInnerTexts();
+                        const dateStr = dateSpans.join('');
+                        for (const button of buttons) {
+                            const timeSlotStr = await button.innerText();
+                            slotsForHieroja.push({dateStr, timeSlotStr});
+                        }
+                    }
                 }
-            });
-
+            }
             const slotsLog = displaySlotsMsg(slotsForHieroja, WEB_URL);
             console.log(`¯\\_(ツ)_/¯ ${hierojanNimi.trimEnd()}:\n${slotsLog}`);
             selectedHierojanNimi = hierojanNimi;
