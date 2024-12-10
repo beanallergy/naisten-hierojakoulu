@@ -78,7 +78,7 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
     // last dropdown
     const valitse_tarjoaja = 'Valitse palveluntarjoaja';
     const kuka_tahansa = 'Kuka tahansa';
-    let selectedHierojanNimi: string | undefined = undefined;
+    let selectedHierojanNimi: string | undefined = undefined; // TODO better selectedHierojanNimi handling
     const tarjoajaDropdown = page.locator(`label:has-text('${valitse_tarjoaja}') + td-select`);
     const hierojienNimet = (await tarjoajaDropdown.locator('div ul li').allInnerTexts()).filter((nimi) => nimi.length > 0);
     expect(hierojienNimet.length).toBeGreaterThan(1);
@@ -100,20 +100,24 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
       }
 
       const slotRequestListener = async (req: Request, nimi: string) => {
-        if (!req.url().includes(`${API_BASE_URL}/slot`)) { return; }
+        if (!req.url().startsWith(`${API_BASE_URL}/slot`) || !req.url().includes('user_id')) {
+          return;
+        }
+
         const response = await req.response();
         if (!response) {
           console.error(`No response for slots API request for ${nimi}`);
-          return;
-        }
-        if (response.url() !== req.url() || response.headers()['content-type'] && !response.headers()['content-type'].includes('json')) {
-          console.error(`Non- API response for ${nimi}:`, response.url());
           return;
         }
         if (response.status() !== 200) {
           console.error(`Failed API response for ${nimi}:`, response.statusText());
           return;
         }
+        if (response.headers()['content-type'] && !response.headers()['content-type'].includes('json')) {
+          console.error(`Non-JSON API response for ${nimi}:`, response.url());
+          return;
+        }
+
         let responseBody;
         try {
           responseBody = await response.json();
@@ -121,12 +125,13 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
           console.error(`Failed to parse JSON slots API response for ${nimi}`, e);
           return;
         }
+
         const slotsLog = displaySlotsMsg(responseBody?.data
           .filter(i => i.type === 'slot')
           .map(slot => slot.attributes as Slot)
         );
         console.log(`¯\\_(ツ)_/¯ ${nimi}: Slots:`, slotsLog);
-        // TODO slots printed twice for everyone
+        // TODO slots printed twice for everyone https://playwright.dev/docs/events#waiting-for-event
         // TODO slots of Katariina got printed for Niina Mira etc.
       };
       
