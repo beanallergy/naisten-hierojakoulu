@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 import * as fs from 'fs';
 import Papa from 'papaparse';
 
-//const URL = 'https://hierojakoulu.net/ajanvaraus/';
-const URL = 'https://avoinna24.fi/lahdenhierojakoulu/reservation';
+const WEB_URL = 'https://avoinna24.fi/lahdenhierojakoulu/reservation';
+const API_BASE_URL = `https://avoinna24.fi/api`;
 interface DropdownSequence {
   toimipiste: string;
   tyyppi: string;
@@ -54,13 +55,40 @@ function isWomanName(name: string, womenNames: string[]): boolean {
   return womenNames.includes(etunimi);
 }
 
-test('Hierojakoulu ajanvaraus', async ({ page }) => {
+test.skip('Hierojakoulu: calling APIs - NOT WORKING BECAUSE OF CORS', async () => {
+  const company = await axios.get(`${API_BASE_URL}/company/lahdenhierojakoulu?include=extensionsettings,branches`);
+  expect(company.status).toBe(200);
+  expect(company.data).toHaveProperty('data.attributes.branches');
+  const allBranches: any[] = company.data.data.attributes.branches;
+  const branchToLookup = SEQUENCES[0].toimipiste;
+  const BRANCH_ID = allBranches.filter((branch) => branch.name === branchToLookup)[0]['branch_id'];
+  let reservationFilter: any;
+  try {
+    console.info(`Fetching reservationfilter API with branch ${branchToLookup} id=${BRANCH_ID} (looked up from /company API)`);
+    reservationFilter = await axios.get(
+      `${API_BASE_URL}/reservationfilter/?branch_id=${BRANCH_ID}`,
+      {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Referer": `${WEB_URL}?branch_id=${BRANCH_ID}`,
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        }
+      }
+    );
+  } catch (error: AxiosError | any) {
+    console.error('Failed to fetch reservationfilter API with headers:', (error as AxiosError).request?._header, 'response headers:', (error as AxiosError).response?.headers);
+    throw(`Failed to fetch reservationfilter API: ${(error as AxiosError).response?.status} ${(error as AxiosError).response?.statusText}`);
+  }
+  console.log('reservationfilter API response:', reservationFilter.data);
+});
+
+test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
   const X_SYMBOL = `×`;
   const naistenNimet = readEtunimetCSV();
 
   for (const seq of SEQUENCES) {
     console.log(SEPARATOR);
-    await page.goto(URL);
+    await page.goto(WEB_URL);
     await expect(page).toHaveTitle(/Ajanvaraus.*Lahden.*hierojakoulu/i);
     await page.waitForLoadState('domcontentloaded');
     
@@ -77,19 +105,34 @@ test('Hierojakoulu ajanvaraus', async ({ page }) => {
       console.log(`Valittu ${key}: ${selectedText}`);
     }
     // last dropdown
+    let selectedHieroja: string = '';
     const tarjoajaDropdown = page.locator(`label:has-text('${TARJOAJA}') + td-select`);
     const hierojat = tarjoajaDropdown.locator('div ul li');
     const count = await hierojat.count();
+    await tarjoajaDropdown.locator('a').click();
     expect(count).toBeGreaterThan(1);
     for (let i = 0; i < count; i++) {
-      const hierojanNimi = (await hierojat.nth(i).innerText());
-      if (hierojanNimi.length === 0) {
-        continue;
-      }
-      //await hierojat.nth(i).click();
-      console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`,isWomanName(hierojanNimi, naistenNimet));
-      //const hierojaSelected = page.getByText(`${hierojanNimi} ${X_SYMBOL} `);
-      //expect(hierojaSelected).toBeVisible();
+        if (selectedHieroja.length !== 0) {
+          console.log(`Removing previous selection ${selectedHieroja} ...`);
+          const tarjoajaDropdownSelected = page.locator('a').filter({ hasText: `${selectedHieroja} ${X_SYMBOL}` });
+          await tarjoajaDropdownSelected.locator('a').click();
+          expect(tarjoajaDropdownSelected).not.toBeVisible();
+          selectedHieroja = '';
+        }
+        await tarjoajaDropdown.locator('a').click();
+
+        const hierojanNimi = (await hierojat.nth(i).innerText());
+        if (hierojanNimi.length === 0) {
+          continue;
+        }
+        const isWoman = isWomanName(hierojanNimi, naistenNimet);
+        console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`, isWoman);
+        if (!isWoman) {
+          continue;
+        }
+        await page.getByRole('menuitem', { name: hierojanNimi }).click();
+        console.log(`Valittu palveluntarjoaja: ${hierojanNimi}`);
+        selectedHieroja = hierojanNimi;
     }
     console.log(SEPARATOR);
   }

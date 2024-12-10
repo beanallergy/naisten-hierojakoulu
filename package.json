@@ -10,8 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "papaparse": "^5.4.1",
     "@playwright/test": "^1.48.2",
-    "@types/node": "^22.9.0"
+    "@types/node": "^22.9.0",
+    "axios": "^1.7.7",
+    "papaparse": "^5.4.1"
   }
 }
