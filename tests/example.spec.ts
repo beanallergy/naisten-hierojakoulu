@@ -13,13 +13,11 @@ const SEQUENCES: DropdownSequence[] = [
     tyyppi: 'Hieronta (koulutetut hierojat)',
     palvelu: '25 min hieronta (koul.hier.)',
   },
-  /*
   {
     toimipiste: 'LAHTI - Opiskelijahieronta (Karjalankatu 45)',
     tyyppi: 'Opiskelijahieronta', // TODO regex matches 3 elements here
     palvelu: '25 min hieronta (opiskelija)',
   }
-  */
 ];
 const TARJOAJA = 'Valitse palveluntarjoaja';
 const SEPARATOR = '---------------------------------';
@@ -38,8 +36,8 @@ test('Hierojakoulu ajanvaraus', async ({ page }) => {
 
     for (const key of Object.keys(seq) as (keyof DropdownSequence)[]) {
       const selectedText = seq[key];
-      await page.locator('td-select').filter({ hasText: selectedText }).locator('a').click();
-      await page.getByRole('menuitem', { name: selectedText }).click();
+      await page.locator('td-select').filter({ has: page.locator(`text="${selectedText}"`) }).locator('a').click();
+      await page.getByRole('menuitem', { name: selectedText }).first().click();
       const dropdownSelected = page.getByText(`${selectedText} ${X_SYMBOL} `);
       expect(dropdownSelected).toBeVisible();
       console.log(`Valittu ${key}: ${selectedText}`);
