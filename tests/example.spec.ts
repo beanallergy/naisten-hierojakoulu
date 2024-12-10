@@ -68,12 +68,12 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
                 continue;
             }
 
-            if (i === 0) {
-                await page.locator('span', { hasText: kuka_tahansa }).isVisible();
-                await page.locator('a').filter({ hasText: kuka_tahansa }).click();
-            } else {
+            if (i != 0 && selectedHierojanNimi) {
                 await page.locator('a').filter({ hasText: `${selectedHierojanNimi} ${X_SYMBOL}` }).isVisible();
                 await page.getByText(`${selectedHierojanNimi} ${X_SYMBOL}`).click();
+            } else {
+                await page.locator('span', { hasText: kuka_tahansa }).isVisible();
+                await page.locator('a').filter({ hasText: kuka_tahansa }).click();
             }
 
             await page.getByRole('menuitem', { name: hierojanNimi }).click();
@@ -82,7 +82,7 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
 
             const spinners = await page.locator('.progress-loader-spinner').all();
             for (const spinner of spinners) {
-                await expect(spinner).toBeHidden();
+                await expect(spinner).toBeHidden({ timeout: 10000 });
             }
 
             const zeroSlotTextVisible = await page.getByText(NO_SLOT_TEXT).isVisible();
@@ -103,8 +103,8 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
                     }
                 }
             }
-            const slotsLog = displaySlotsMsg(slotsForHieroja, WEB_URL);
-            console.log(`¯\\_(ツ)_/¯ ${hierojanNimi.trimEnd()}:\n${slotsLog}`);
+            const slotsLog = displaySlotsMsg(slotsForHieroja, hierojanNimi, WEB_URL);
+            console.log(slotsLog);
             selectedHierojanNimi = hierojanNimi;
         }
         console.log(SEPARATOR);

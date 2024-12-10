@@ -26,15 +26,19 @@ export async function slotRequestListener(response: Response, nimi: string): Pro
     return slots;
 }
 
-export function displaySlotsMsg(slots: ApiSlot[] | UISlot[] | undefined, url: string): string {
+export function displaySlotsMsg(slots: ApiSlot[] | UISlot[] | undefined, hierojanNimi: string, url: string): string {
+    const nameMsg = `${hierojanNimi.trimEnd()}:`;
+    const nay = ':(';
+    const yay = ':)';
+    const tab = '    ';
     if (!slots || slots.length === 0) {
-        return 'No slots available';
+        return `${nay} ${nameMsg} No slots available`;
     }
-    const slotsMsg = slots.slice(0, 5).map(slot => formatSlot(slot)).join('\n');
+    const slotsMsg = slots.slice(0, 5).map(slot => formatSlot(slot)).join(`\n${tab}${tab}`);
     const remainingMsg = slots.length > 5 ? `...and ${slots.length - 5} more on ${url}` : '';
     return slots.length > 5
-        ? `First 5 slots:\n${slotsMsg}\n${remainingMsg}`
-        : `${slots.length} slots:\n${slotsMsg}`;
+        ? `${yay} ${nameMsg}\n${tab}First 5 slots:\n${tab}${tab}${slotsMsg}\n${remainingMsg}`
+        : `${yay} ${nameMsg} ${slots.length} slots:\n${tab}${tab}${slotsMsg}`;
 }
 
 export function formatSlot(slot: ApiSlot | UISlot): string {
