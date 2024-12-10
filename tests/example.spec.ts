@@ -1,5 +1,4 @@
-import { test, expect } from '@playwright/test';
-import axios, { AxiosError } from 'axios';
+import { test, expect, Response, Request } from '@playwright/test';
 import * as fs from 'fs';
 import Papa from 'papaparse';
 
@@ -84,32 +83,81 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
     const hierojienNimet = (await tarjoajaDropdown.locator('div ul li').allInnerTexts()).filter((nimi) => nimi.length > 0);
     expect(hierojienNimet.length).toBeGreaterThan(1);
 
-    for (const hierojanNimi of hierojienNimet) {
+    for (let i = 0; i < hierojienNimet.length; i++) {
+      const hierojanNimi = hierojienNimet[i];
       const isWoman = isWomanName(hierojanNimi, naistenNimet);
       console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`, isWoman);
       if (!isWoman) {
         continue;
       }
 
-      if (selectedHierojanNimi != null) {
-        const tarjoajaDropdownSelected = page.locator('a').filter({ hasText: `${selectedHierojanNimi} ${X_SYMBOL}` });
-        if (await tarjoajaDropdownSelected.isVisible()) {
-          console.log(`New loop, removing previous selection ${selectedHierojanNimi} ...`);
-          await tarjoajaDropdownSelected.locator('a').click(); // remove existing selection by clicking x
-          expect(tarjoajaDropdownSelected).not.toBeVisible();
-        };
-        selectedHierojanNimi = undefined;
+      if (i === 0) {
+        await page.locator('span', { hasText: kuka_tahansa }).isVisible();
+        await page.locator('a').filter({ hasText: kuka_tahansa }).click();
+      } else {
+        await page.locator('a').filter({ hasText: `${selectedHierojanNimi} ${X_SYMBOL}` }).isVisible();
+        await page.getByText(`${selectedHierojanNimi} ${X_SYMBOL}`).click();
       }
 
-      await page.locator('span', { hasText: kuka_tahansa }).isVisible();
-      await page.locator('a').filter({ hasText: kuka_tahansa }).click();
-
+      const slotRequestListener = async (req: Request, nimi: string) => {
+        if (!req.url().includes(`${API_BASE_URL}/slot`)) { return; }
+        const response = await req.response();
+        if (!response) {
+          console.error(`No response for slots API request for ${nimi}`);
+          return;
+        }
+        if (response.url() !== req.url() || response.headers()['content-type'] && !response.headers()['content-type'].includes('json')) {
+          console.error(`Non- API response for ${nimi}:`, response.url());
+          return;
+        }
+        if (response.status() !== 200) {
+          console.error(`Failed API response for ${nimi}:`, response.statusText());
+          return;
+        }
+        let responseBody;
+        try {
+          responseBody = await response.json();
+        } catch (e) {
+          console.error(`Failed to parse JSON slots API response for ${nimi}`, e);
+          return;
+        }
+        const slotsLog = displaySlotsMsg(responseBody?.data
+          .filter(i => i.type === 'slot')
+          .map(slot => slot.attributes as Slot)
+        );
+        console.log(`¯\\_(ツ)_/¯ ${nimi}: Slots:`, slotsLog);
+        // TODO slots printed twice for everyone
+        // TODO slots of Katariina got printed for Niina Mira etc.
+      };
+      
+      page.on('requestfinished', req => slotRequestListener(req, hierojanNimi));
       await page.getByRole('menuitem', { name: hierojanNimi }).click();
+      
       await page.getByRole('heading', { name: hierojanNimi }).isVisible();
-      selectedHierojanNimi = hierojanNimi;
       console.log(`Valittu palveluntarjoaja: ${hierojanNimi}`);
+      selectedHierojanNimi = hierojanNimi;
     }
     console.log(SEPARATOR);
-    await page.reload();
   }
 });
+
+type Slot = {
+  product_id: string;
+  starttime: string;
+  endtime: string;
+}
+
+function displaySlotsMsg(slots: Slot[]): string {
+  if (slots.length === 0) {
+    return 'No slots available';
+  }
+  const slotsMsg = slots.slice(0, 5).map(slot => formatSlot(slot)).join('\n');
+  const remainingMsg = slots.length > 5 ? `...and ${slots.length - 5} more on ${WEB_URL}` : '';
+  return slots.length > 5 ? `First 5 slots:\n${slotsMsg}\n${remainingMsg}` : slotsMsg;
+}
+
+function formatSlot(slot: Slot): string {
+  const start = new Date(slot.starttime);
+  const end = new Date(slot.endtime);
+  return `${start.toLocaleString()} - ${end.toLocaleTimeString()}`;
+};
