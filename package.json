@@ -9,9 +9,9 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {
+  "dependencies": {
+    "papaparse": "^5.4.1",
     "@playwright/test": "^1.48.2",
-    "@types/node": "^22.9.0",
-    "csv-parser": "^3.0.0"
+    "@types/node": "^22.9.0"
   }
 }

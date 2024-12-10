@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import csv from 'csv-parser';
 import * as fs from 'fs';
+import Papa from 'papaparse';
 
 //const URL = 'https://hierojakoulu.net/ajanvaraus/';
 const URL = 'https://avoinna24.fi/lahdenhierojakoulu/reservation';
@@ -28,27 +28,29 @@ function readEtunimetCSV(): string[] {
   const filePath = './data/etunimitilasto-2024-08-05-dvv-naiset-kaikki.csv';
   const naistenEtunimet: string[] = [];
 
-  fs.createReadStream(filePath)
-    .pipe(csv({ separator: ';' }))
-    .on('data', (row: any) => {
-      const name = row['Etunimi'];
-      if (name == null || name.length === 0) {
-        return;
-      }
-      naistenEtunimet.push(name);
-    })
-    .on('end', () => {
-      if (naistenEtunimet.length === 0) {
-        throw('Failed to process CSV file: 0 rows parsed');
-      }
-      console.log(`CSV file processed successfully. Checking against ${naistenEtunimet.length} women names in Finland`);
-    });
+  const fileContent = fs.readFileSync(filePath, 'utf8');
+  Papa.parse(fileContent, {
+    header: true,
+    delimiter: ';',
+    complete: (results) => {
+      // only check against 1000 most common names
+      results.data.slice(0, 1000).forEach((row) => {
+        const name = row['Etunimi'];
+        if (name != null && name.length > 0) {
+          naistenEtunimet.push(name);
+        }
+      });
+    },
+  });
+  if (naistenEtunimet.length === 0) {
+    throw('Failed to process CSV file: 0 rows parsed');
+  }
+  console.log(`CSV file processed successfully. Checking against ${naistenEtunimet.length} women names in Finland`);
   return naistenEtunimet;
 };
 
 function isWomanName(name: string, womenNames: string[]): boolean {
   const etunimi = name.trimStart().split(' ')[0];
-  console.log(`Checking first name ${etunimi}`);
   return womenNames.includes(etunimi);
 }
 
@@ -75,7 +77,8 @@ test('Hierojakoulu ajanvaraus', async ({ page }) => {
       console.log(`Valittu ${key}: ${selectedText}`);
     }
     // last dropdown
-    const hierojat = page.locator(`label:has-text('${TARJOAJA}') + td-select div ul li`);
+    const tarjoajaDropdown = page.locator(`label:has-text('${TARJOAJA}') + td-select`);
+    const hierojat = tarjoajaDropdown.locator('div ul li');
     const count = await hierojat.count();
     expect(count).toBeGreaterThan(1);
     for (let i = 0; i < count; i++) {
@@ -84,7 +87,7 @@ test('Hierojakoulu ajanvaraus', async ({ page }) => {
         continue;
       }
       //await hierojat.nth(i).click();
-      console.log(`Hierojan nimi: ${hierojanNimi} - isWomanName=${isWomanName(hierojanNimi, naistenNimet)}`);
+      console.log(`Hierojan nimi: ${hierojanNimi} - likely woman:`,isWomanName(hierojanNimi, naistenNimet));
       //const hierojaSelected = page.getByText(`${hierojanNimi} ${X_SYMBOL} `);
       //expect(hierojaSelected).toBeVisible();
     }
