@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Massage booking assistant https://hierojakoulu.net/ajanvaraus/",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "debug": "DEBUG=pw:api playwright test --debug",
+    "start": "playwright test"
+  },
   "author": "",
   "license": "ISC",
   "devDependencies": {
