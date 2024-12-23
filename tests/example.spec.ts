@@ -29,6 +29,8 @@ function isWomanName(name: string, womenNames: string[]): boolean {
 }
 
 const NO_SLOT_TEXT = "Yhtään vapaita aikoja ei löytynyt valitulla ajanvarausvälillä."
+const long_wait_ms = 15000;
+const short_wait_ms = 2000;
 
 test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
     const X_SYMBOL = `×`;
@@ -41,7 +43,7 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
         await page.waitForLoadState('domcontentloaded');
 
         const allDropdowns = page.locator('td-select');
-        await allDropdowns.first().waitFor({ state: 'visible', timeout: 10000 });
+        await allDropdowns.first().waitFor({ state: 'visible', timeout: short_wait_ms });
         expect(await allDropdowns.count()).toEqual(4);
 
         for (const key of Object.keys(seq) as (keyof DropdownSequence)[]) {
@@ -80,10 +82,12 @@ test('Hierojakoulu: clicking dropdowns', async ({ page }) => {
             await page.getByRole('heading', { name: hierojanNimi }).isVisible();
             //console.log(`Valittu palveluntarjoaja: ${hierojanNimi}`);
 
+            // Assumptions: all timeslots received from backend == no more spinners in frontend
             const spinners = await page.locator('.progress-loader-spinner').all();
             for (const spinner of spinners) {
-                await expect(spinner).toBeHidden({ timeout: 10000 });
+                await expect(spinner).toBeHidden({ timeout: long_wait_ms });
             }
+            await page.waitForTimeout(short_wait_ms);
 
             const zeroSlotTextVisible = await page.getByText(NO_SLOT_TEXT).isVisible();
             
